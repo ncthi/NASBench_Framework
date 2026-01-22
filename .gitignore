@@ -1,0 +1,116 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+dist/
+downloads/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Type checking / lint caches
+.mypy_cache/
+.pytype/
+.pyre/
+.ruff_cache/
+
+# Environments
+.env
+.env.*
+.venv/
+venv/
+ENV/
+env/
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data / ML artifacts (often large)
+data/
+datasets/
+outputs/
+runs/
+wandb/
+mlruns/
+lightning_logs/
+tb_logs/
+checkpoints/
+
+# Common model/data binaries
+*.ckpt
+*.pth
+*.pt
+*.h5
+*.pb
+*.tfrecord
+*.npz
+*.npy
+*.pkl
+*.pickle
+*.joblib
+
+# Archives (often large)
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+*.gz
+*.bz2
+*.xz
+
+# NAS benchmark assets (downloaded/generated; typically huge)
+nasbench/nasbench101/nasbench_full.tfrecord
+nasbench/nasbench201/*.pth
+nasbench/nasbench301/nb_models_0.9/
+nasbench/nasbench301/nb_models_1.0/
+
+# Local credentials
+*.pem
+*.key
