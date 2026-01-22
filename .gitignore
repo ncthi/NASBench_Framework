@@ -111,6 +111,9 @@ nasbench/nasbench201/*.pth
 nasbench/nasbench301/nb_models_0.9/
 nasbench/nasbench301/nb_models_1.0/
 
+# AccelNASBench surrogate models (large)
+nasbench/accel_nasbench/anb_models_*/
+
 # Local credentials
 *.pem
 *.key

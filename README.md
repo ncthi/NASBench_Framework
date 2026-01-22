@@ -1,47 +1,18 @@
 # NASBench Framework
 
-A lightweight Python framework for querying neural architecture search (NAS) benchmarks from a unified interface.
-
-## Goal
-
-This project aims to provide a single, consistent API to **query architectures and their benchmarked results** from three popular NAS benchmarks:
-
-- **NAS-Bench-101**
-- **NAS-Bench-201**
-- **NAS-Bench-301**
-
-The intent is to make it easy to:
-
-- Fetch benchmarked metrics (e.g., accuracy, training time, params, FLOPs when available)
-- Standardize architecture representations and conversions across benchmarks
-- Build reproducible evaluation pipelines for NAS research
-
-## Key Features (Planned)
-
-- Unified `query()` interface across benchmarks
-- Benchmark-specific adapters with a shared schema for returned results
-- Pluggable architecture encoders/decoders (e.g., cell graphs, operation strings)
-- Local caching and fast lookup
-
-## Repository Layout (Suggested)
-
-The repository is intentionally minimal at the moment. A typical layout will look like:
-
-```
-# NASBench Framework
-
 This repository provides a simple command-line interface (CLI) to query multiple NAS benchmarks from one place:
 
 - NAS-Bench-101
 - NAS-Bench-201
 - NAS-Bench-301
 - HW-NAS-Bench
+- AccelNASBench
 
-## Repository layout
+## Repository Layout (Suggested)
 
 The current project structure is:
 
-```
+```text
 .
 ├── environment.yml            # Conda environment definition
 ├── main.py                    # CLI entry point (argparse)
@@ -51,12 +22,14 @@ The current project structure is:
 │   ├── get_nasbench101.py
 │   ├── get_nasbench201.py
 │   ├── get_nasbench301.py
-│   └── get_hwnasbench.py
+│   ├── get_hwnasbench.py
+│   └── get_accelnasbench.py
 └── nasbench/                  # Benchmark APIs + bundled assets
-    ├── nasbench101/           # NAS-Bench-101 API code (+ TFRecord in this repo)
-    ├── nasbench201/           # NAS-Bench-201 API code (+ .pth in this repo)
-    ├── nasbench301/           # NAS-Bench-301 API code (+ surrogate model files)
-    └── hw_nas_bench/          # HW-NAS-Bench API code (+ search spaces)
+    ├── accel_nasbench/         # AccelNASBench surrogate models + search space
+    ├── hw_nas_bench/           # HW-NAS-Bench API code (+ search spaces)
+    ├── nasbench101/            # NAS-Bench-101 API code (+ TFRecord in this repo)
+    ├── nasbench201/            # NAS-Bench-201 API code (+ .pth in this repo)
+    └── nasbench301/            # NAS-Bench-301 API code (+ surrogate model files)
 ```
 
 ## 1) Conda environment setup
@@ -98,7 +71,7 @@ python -c "import torch; import tensorflow as tf; print('torch', torch.__version
 
 All functionality is exposed via `main.py` using subcommands.
 
-### General help
+### Help
 
 ```bash
 python main.py -h
@@ -106,42 +79,61 @@ python main.py nasbench101 -h
 python main.py nasbench201 -h
 python main.py nasbench301 -h
 python main.py hwnasbench -h
+python main.py accelnasbench -h
 ```
 
-### Command overview
+### NAS-Bench-101
 
-#### NAS-Bench-101
+**Usage**
 
 ```bash
-python main.py nasbench101 --epochs 108 --k 10
+python main.py nasbench101 [--epochs {4,12,36,108}] [--k K]
 ```
 
-Options:
+**Options**
 
 - `--epochs` (int, default: `108`, choices: `4, 12, 36, 108`): training budget to query.
 - `--k` (int, default: `10`): print top-k architectures by validation accuracy.
 
-#### NAS-Bench-201
+**Examples**
 
 ```bash
-python main.py nasbench201 --dataset cifar10 --hp 12 --setname x-valid --k 10
+python main.py nasbench101 --epochs 108 --k 10
+python main.py nasbench101 --epochs 36 --k 20
 ```
 
-Options:
+### NAS-Bench-201
+
+**Usage**
+
+```bash
+python main.py nasbench201 [--dataset DATASET] [--hp {12,200}] [--setname {train,x-valid,x-test,ori-test}] [--is-random] [--k K]
+```
+
+**Options**
 
 - `--dataset` (str, default: `cifar10`): e.g. `cifar10`, `cifar10-valid`, `cifar100`, `ImageNet16-120`.
 - `--hp` (str, default: `12`, choices: `12, 200`): training regime used in the benchmark.
 - `--setname` (str, default: `train`, choices: `train, x-valid, x-test, ori-test`): which split to read metrics from.
-- `--is-random` (flag): query metrics for random architectures.
+- `--is-random` (flag): if set, query metrics for random architectures.
 - `--k` (int, default: `10`): print top-k architectures by accuracy.
 
-#### NAS-Bench-301 (surrogate ensemble)
+**Examples**
 
 ```bash
-python main.py nasbench301 --num-samples 100 --seed 0 --version 1.0 --k 10
+python main.py nasbench201 --dataset cifar10 --hp 12 --setname x-valid --k 10
+python main.py nasbench201 --dataset cifar100 --hp 200 --setname x-test --is-random --k 10
 ```
 
-Options:
+### NAS-Bench-301 (surrogate ensemble)
+
+**Usage**
+
+```bash
+python main.py nasbench301 [--with_noise] [--num-samples N] [--seed SEED] [--version {1.0,2.0}] [--k K]
+```
+
+**Options**
 
 - `--num-samples` (int, default: `100`): number of random samples to draw from the surrogate ensemble.
 - `--seed` (int, default: `0`): RNG seed for sampling.
@@ -149,42 +141,82 @@ Options:
 - `--with_noise` (flag): toggles the surrogate noise behavior (see `-h` output / implementation).
 - `--k` (int, default: `10`): print top-k architectures by predicted accuracy.
 
-#### HW-NAS-Bench
-
-Example (per-device ranking):
+**Examples**
 
 ```bash
-python main.py hwnasbench \
-  --device raspi4 \
-  --metric latency \
-  --dataset cifar10 \
-  --search_space nasbench201 \
-  --split x-valid \
-  --k 10
+python main.py nasbench301 --num-samples 100 --seed 0 --version 1.0 --k 10
+python main.py nasbench301 --num-samples 500 --seed 1 --version 2.0 --k 50
 ```
 
-Example (aggregate across devices + JSON output):
+### HW-NAS-Bench
+
+**Usage (per-device)**
 
 ```bash
-python main.py hwnasbench --mode aggregate --agg mean --metric latency --json --k 10
+python main.py hwnasbench --mode per_device --device DEVICE [--metric METRIC] [--dataset DATASET] [--search_space {nasbench201,fbnet}] [--hp {12,200}] [--split {train,x-valid,x-test,ori-test}] [--is-random] [--show-accuracy] [--json] [--k K]
 ```
 
-Options:
+**Usage (aggregate)**
 
-- `--device` (str, choices: `edgegpu, edgetpu, eyeriss, fpga, pixel3, raspi4`): target device (recommended for `--mode per_device`).
-- `--metric` (str, default: `latency`, choices: `latency, energy, peak_power, avg_power, inference_time`).
+```bash
+python main.py hwnasbench --mode aggregate --agg {mean,max,product} [--metric METRIC] [--dataset DATASET] [--search_space {nasbench201,fbnet}] [--hp {12,200}] [--split {train,x-valid,x-test,ori-test}] [--is-random] [--show-accuracy] [--json] [--k K]
+```
+
+**Options**
+
+- `--mode` (str, default: `per_device`, choices: `per_device, aggregate`): choose per-device query or aggregate scoring.
+- `--device` (str, choices: `edgegpu, edgetpu, eyeriss, fpga, pixel3, raspi4`): target device (used in `per_device` mode).
+- `--agg` (str, default: `mean`, choices: `mean, max, product`): aggregation rule (only for `aggregate` mode).
+- `--metric` (str, default: `latency`, choices: `latency, energy, peak_power, avg_power, inference_time`): hardware metric.
 - `--dataset` (str, default: `cifar10`).
+- `--search_space` (str, default: `nasbench201`, choices: `nasbench201, fbnet`).
 - `--hp` (str, default: `12`, choices: `12, 200`).
 - `--split` (str, default: `x-valid`, choices: `train, x-valid, x-test, ori-test`).
 - `--is-random` (flag): query random architectures.
-- `--search_space` (str, default: `nasbench201`, choices: `nasbench201, fbnet`).
 - `--show-accuracy` (flag): show accuracy along with hardware metrics (only for `nasbench201` search space).
-- `--mode` (str, default: `per_device`, choices: `per_device, aggregate`).
-- `--agg` (str, default: `mean`, choices: `mean, max, product`): only used when `--mode aggregate`.
 - `--json` (flag): print JSON output.
+- `--k` (int, default: `10`): print top-k architectures.
 - `--fbnet-samples` (int, default: `2000`): (FBNet only) candidate sample size for top-k.
 - `--fbnet-seed` (int, default: `None`): (FBNet only) RNG seed.
-- `--k` (int, default: `10`): print top-k architectures by the selected metric.
+
+**Examples**
+
+```bash
+python main.py hwnasbench --mode per_device --device raspi4 --metric latency --dataset cifar10 --search_space nasbench201 --split x-valid --k 10
+python main.py hwnasbench --mode aggregate --agg mean --metric latency --json --k 10
+```
+
+### AccelNASBench (surrogate ensemble)
+
+AccelNASBench queries a surrogate ensemble over an EfficientNet-like search space and can rank candidates by:
+
+- `accuracy` (higher is better)
+- `throughput` (higher is better)
+- `latency` (lower is better)
+
+**Usage**
+
+```bash
+python main.py accelnasbench [--seed SEED] [--num-candidates N] [--top-k K] [--sort-by {accuracy,throughput,latency}] [--throughput-device DEV] [--latency-device DEV] [--model MODEL]
+```
+
+**Options**
+
+- `--seed` (int, default: `3`): RNG seed used when sampling candidates and loading the ensemble.
+- `--num-candidates` (int, default: `200`): number of random architectures to sample before ranking.
+- `--top-k` (int, default: `10`): number of best architectures to print.
+- `--sort-by` (str, default: `accuracy`, choices: `accuracy, throughput, latency`): objective used for ranking.
+- `--throughput-device` (str, default: `tpuv2`): device name used for throughput surrogate.
+- `--latency-device` (str, default: `zcu102`): device name used for latency surrogate.
+- `--model` (str, default: `xgb`): surrogate model family.
+
+**Examples**
+
+```bash
+python main.py accelnasbench --num-candidates 200 --top-k 10 --sort-by accuracy --seed 3
+python main.py accelnasbench --sort-by throughput --throughput-device tpuv2 --model xgb
+python main.py accelnasbench --sort-by latency --latency-device zcu102 --model xgb
+```
 
 ## 3) Troubleshooting
 

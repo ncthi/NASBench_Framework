@@ -162,6 +162,21 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="(FBNet only) RNG seed for sampling candidates",
     )
+    paccel = subparsers.add_parser("accelnasbench", help="Query AccelNASBench surrogate ensemble")
+    
+    paccel.add_argument("--seed", type=int, default=3)
+    paccel.add_argument("--num-candidates", type=int, default=200)
+    paccel.add_argument("--top-k", type=int, default=10)
+    paccel.add_argument(
+        "--sort-by",
+        type=str,
+        default="accuracy",
+        choices=["accuracy", "throughput", "latency"],
+        help="Which metric to optimize (accuracy/throughput: max, latency: min).",
+    )
+    paccel.add_argument("--throughput-device", type=str, default="tpuv2")
+    paccel.add_argument("--latency-device", type=str, default="zcu102")
+    paccel.add_argument("--model", type=str, default="xgb")
     return parser
 
 
