@@ -39,6 +39,12 @@ dependencies:
   # --- Typing helpers (Python 3.7 compatibility) ---
   - typing_extensions
 
+  #  ---- SUITE ZERO 
+  - fvcore==0.1.5.post20210630
+  - scikit-image
+  - transforms3d
+  - pytorch-msssim
+
 
   # --- Pip-only / version-pinned deps ---
   - pip:

@@ -7,6 +7,7 @@ This repository provides a simple command-line interface (CLI) to query multiple
 - NAS-Bench-301
 - HW-NAS-Bench
 - AccelNASBench
+- NAS-Bench-Suite-Zero
 
 ## Repository Layout (Suggested)
 
@@ -23,13 +24,15 @@ The current project structure is:
 │   ├── get_nasbench201.py
 │   ├── get_nasbench301.py
 │   ├── get_hwnasbench.py
-│   └── get_accelnasbench.py
+│   ├── get_accelnasbench.py
+│   └── get_suitezero.py
 └── nasbench/                  # Benchmark APIs + bundled assets
     ├── accel_nasbench/         # AccelNASBench surrogate models + search space
     ├── hw_nas_bench/           # HW-NAS-Bench API code (+ search spaces)
     ├── nasbench101/            # NAS-Bench-101 API code (+ TFRecord in this repo)
     ├── nasbench201/            # NAS-Bench-201 API code (+ .pth in this repo)
-    └── nasbench301/            # NAS-Bench-301 API code (+ surrogate model files)
+    ├── nasbench301/            # NAS-Bench-301 API code (+ surrogate model files)
+    └── nas_bench_suite_zero/   # NAS-Bench-Suite-Zero (naslib integration)
 ```
 
 ## 1) Conda environment setup

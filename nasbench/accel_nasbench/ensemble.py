@@ -7,7 +7,7 @@ import numpy as np
 from abc import abstractmethod
 
 # from nasbench301.surrogate_models import utils
-import utils
+import  nasbench.accel_nasbench.utils
 
 
 class AbstractEnsemble:

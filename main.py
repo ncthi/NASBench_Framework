@@ -177,6 +177,55 @@ def build_parser() -> argparse.ArgumentParser:
     paccel.add_argument("--throughput-device", type=str, default="tpuv2")
     paccel.add_argument("--latency-device", type=str, default="zcu102")
     paccel.add_argument("--model", type=str, default="xgb")
+
+    pzero= subparsers.add_parser("suitezero", help="Query SuiteZero benchmark")
+    pzero.add_argument(
+        "--search_space",
+        required=True,
+        choices="nasbench101,nasbench201,nasbench301,transbench101_macro,transbench101_micro".split(","),
+        help="Benchmark/search space to query.",
+    )
+    pzero.add_argument(
+        "--task",
+        required=False,
+        type=str,
+        help="Task/dataset name (defaults to the first supported for the selected search space).",
+    )
+    pzero.add_argument(
+        "--metric",
+        required=False,
+        default="VAL_ACCURACY",
+        type=str,
+        choices=["VAL_ACCURACY", "TEST_ACCURACY", "TRAIN_ACCURACY", "LATENCY", "PARAMETERS", "FLOPS"],
+        help="Metric to use for ranking architectures.",
+    )
+    pzero.add_argument(
+        "--top_k",
+        required=False,
+        default=10,
+        type=int,
+        help="Number of top architectures to return.",
+    )
+    pzero.add_argument(
+        "--max_archs",
+        required=False,
+        default=None,
+        type=int,
+        help="Maximum number of architectures to evaluate (None = all).",
+    )
+    pzero.add_argument(
+        "--epoch",
+        required=False,
+        default=-1,
+        type=int,
+        help="Epoch index passed to graph.query (many benchmarks use -1 for last epoch).",
+    )
+    pzero.add_argument(
+        "--jsonl",
+        required=False,
+        action="store_true",
+        help="Print results as JSON Lines.",
+    )
     return parser
 
 

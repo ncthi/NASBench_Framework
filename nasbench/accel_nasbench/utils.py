@@ -12,16 +12,16 @@ from ConfigSpace.read_and_write import json as config_space_json_r_w
 from scipy.stats import norm, spearmanr, kendalltau
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
 
-from surrogate_models.svr.svr import SVR
-from surrogate_models.svr.svr import SVRAccel
-from surrogate_models.svr.nu_svr import NuSVR
-from surrogate_models.svr.nu_svr import NuSVRAccel
-from surrogate_models.random_forest.sklearn_forest import SklearnForest
-from surrogate_models.random_forest.sklearn_forest import SklearnForestAccel
-from surrogate_models.gradient_boosting.xgboost import XGBModel
-from surrogate_models.gradient_boosting.xgboost import XGBModelAccel
-from surrogate_models.gradient_boosting.lgboost import LGBModel
-from surrogate_models.gradient_boosting.lgboost import LGBModelAccel
+from nasbench.accel_nasbench.surrogate_models.svr.svr import SVRAccel
+from nasbench.accel_nasbench.surrogate_models.svr.svr import SVR
+from nasbench.accel_nasbench.surrogate_models.svr.nu_svr import NuSVR
+from nasbench.accel_nasbench.surrogate_models.svr.nu_svr import NuSVRAccel
+from nasbench.accel_nasbench.surrogate_models.random_forest.sklearn_forest import SklearnForest
+from nasbench.accel_nasbench.surrogate_models.random_forest.sklearn_forest import SklearnForestAccel
+from nasbench.accel_nasbench.surrogate_models.gradient_boosting.xgboost import XGBModel
+from nasbench.accel_nasbench.surrogate_models.gradient_boosting.xgboost import XGBModelAccel
+from nasbench.accel_nasbench.surrogate_models.gradient_boosting.lgboost import LGBModel
+from nasbench.accel_nasbench.surrogate_models.gradient_boosting.lgboost import LGBModelAccel
 
 sns.set_style('whitegrid')
 
