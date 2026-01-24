@@ -1,1 +1,0 @@
-{"train_val_test_split": {"train": 0.8, "val": 0.1, "test": 0.1, "filepath_regex": "result_*.json", "type": "all_result_paths", "portion": 646}, "report_freq": 100, "seed": 10}
