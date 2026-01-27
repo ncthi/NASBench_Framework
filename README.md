@@ -8,6 +8,7 @@ This repository provides a simple command-line interface (CLI) to query multiple
 - HW-NAS-Bench
 - AccelNASBench
 - NAS-Bench-Suite-Zero
+- NAS-Bench-X11 (NB101, NB201, NB301, and NB-NLP surrogate models)
 
 ## Repository Layout (Suggested)
 
@@ -25,6 +26,8 @@ The current project structure is:
 │   ├── get_nasbench301.py
 │   ├── get_hwnasbench.py
 │   ├── get_accelnasbench.py
+│   ├── get_nasbench_x11.py
+│   ├── get_nasbench_graph.py
 │   └── get_suitezero.py
 └── nasbench/                  # Benchmark APIs + bundled assets
     ├── accel_nasbench/         # AccelNASBench surrogate models + search space
@@ -32,6 +35,8 @@ The current project structure is:
     ├── nasbench101/            # NAS-Bench-101 API code (+ TFRecord in this repo)
     ├── nasbench201/            # NAS-Bench-201 API code (+ .pth in this repo)
     ├── nasbench301/            # NAS-Bench-301 API code (+ surrogate model files)
+    ├── nas_bench_x11/          # NAS-Bench-X11 surrogate models for NB101/201/301/NLP
+    ├── nas_bench_graph/        # NAS-Bench-Graph benchmarks
     └── nas_bench_suite_zero/   # NAS-Bench-Suite-Zero (naslib integration)
 ```
 
@@ -83,6 +88,7 @@ python main.py nasbench201 -h
 python main.py nasbench301 -h
 python main.py hwnasbench -h
 python main.py accelnasbench -h
+python main.py nasbench_x11 -h
 ```
 
 ### NAS-Bench-101
@@ -220,6 +226,67 @@ python main.py accelnasbench --num-candidates 200 --top-k 10 --sort-by accuracy 
 python main.py accelnasbench --sort-by throughput --throughput-device tpuv2 --model xgb
 python main.py accelnasbench --sort-by latency --latency-device zcu102 --model xgb
 ```
+
+### NAS-Bench-X11 (surrogate models)
+
+NAS-Bench-X11 provides unified surrogate models for predicting architecture performance across multiple search spaces:
+
+- **nb101**: NAS-Bench-101 surrogate (predicts learning curves from architecture encodings)
+- **nb201**: NAS-Bench-201 surrogate (predicts learning curves from architecture strings)
+- **nb301**: NAS-Bench-301 surrogate (predicts learning curves from DARTS genotypes)
+- **nbnlp**: NAS-Bench-NLP surrogate (predicts learning curves for NLP architectures)
+
+**Usage**
+
+```bash
+python main.py nasbench_x11 --search_space {nb101,nb201,nb301,nbnlp} [--num_samples N] [--epoch EPOCH] [--k K]
+```
+
+**Options**
+
+- `--search_space` (str, default: `nbnlp`, choices: `nb101, nb201, nb301, nbnlp`): which search space and surrogate model to use.
+- `--num_samples` (int, default: `10000`): number of random architectures to sample and evaluate with the surrogate model.
+  - For `nb101`: samples from all architectures in NAS-Bench-101 (up to 423,624 total).
+  - For `nb201`: samples from all architectures in NAS-Bench-201 (up to 15,625 total).
+  - For `nb301` and `nbnlp`: generates random architectures from the respective search spaces.
+- `--epoch` (int, default: `0`): epoch index for extracting accuracy from the predicted learning curve (0-indexed).
+  - For `nb201`: typically use epochs 0-199 (hp=200) or 0-11 (hp=12).
+  - For `nb301` and `nbnlp`: typically use epochs 0-97 (98 epochs total).
+- `--k` (int, default: `10`): print top-k architectures by predicted accuracy.
+
+**Examples**
+
+Query NAS-Bench-101 surrogate model (evaluates all ~423k architectures, returns actual test accuracy):
+
+```bash
+python main.py nasbench_x11 --search_space nb101 --k 10
+```
+
+Query NAS-Bench-201 surrogate model (epoch 199):
+
+```bash
+python main.py nasbench_x11 --search_space nb201 --epoch 199 --k 20
+```
+
+Query NAS-Bench-301 surrogate model (sample 10000 random DARTS genotypes):
+
+```bash
+python main.py nasbench_x11 --search_space nb301 --num_samples 10000 --epoch 97 --k 10
+```
+
+Query NAS-Bench-NLP surrogate model (sample 5000 random NLP architectures):
+
+```bash
+python main.py nasbench_x11 --search_space nbnlp --num_samples 5000 --epoch 50 --k 15
+```
+
+**Notes**
+
+- The `nb101` search space queries all architectures from the original NAS-Bench-101 dataset and uses the surrogate to predict learning curves.
+- The `nb201` search space can query up to all 15,625 architectures or sample a subset.
+- The `nb301` and `nbnlp` search spaces generate random valid architectures from their respective search spaces.
+- All surrogate models predict learning curves with noise enabled for more realistic predictions.
+- The models are loaded from `nasbench/nas_bench_x11/models/` directory.
 
 ## 3) Troubleshooting
 

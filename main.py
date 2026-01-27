@@ -10,13 +10,6 @@ def build_parser() -> argparse.ArgumentParser:
     # NAS-Bench-101
     p101 = subparsers.add_parser("nasbench101", help="Query NAS-Bench-101")
     p101.add_argument(
-        "--epochs",
-        type=int,
-        default=108,
-        choices=[4, 12, 36, 108],
-        help="Training epochs budget to query",
-    )
-    p101.add_argument(
         "--k",
         type=int,
         default=10,
@@ -72,7 +65,7 @@ def build_parser() -> argparse.ArgumentParser:
     p301.add_argument(
         "--num-samples",
         type=int,
-        default=100,
+        default=10000,
         help="Number of random samples to draw from the surrogate ensemble",
     )
     p301.add_argument(
@@ -186,8 +179,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Benchmark/search space to query.",
     )
     pzero.add_argument(
-        "--task",
-        required=False,
+        "--dataset",
+        default="cifar10",
         type=str,
         help="Task/dataset name (defaults to the first supported for the selected search space).",
     )
@@ -200,7 +193,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Metric to use for ranking architectures.",
     )
     pzero.add_argument(
-        "--top_k",
+        "--k",
         required=False,
         default=10,
         type=int,
@@ -225,6 +218,51 @@ def build_parser() -> argparse.ArgumentParser:
         required=False,
         action="store_true",
         help="Print results as JSON Lines.",
+    )
+    x11= subparsers.add_parser("nasbench_x11", help="Query NAS-Bench-X11 surrogate model")
+    x11.add_argument(
+        "--search_space",
+        type=str,
+        default="nbnlp",
+        choices=["nb101", "nb201", "nb301", "nbnlp"],
+        help="Search space of the architectures",
+    )
+    x11.add_argument(
+        "--k",
+        type=int,
+        default=10,
+        help="If set, prints top-k architectures by predicted accuracy",
+    )
+    x11.add_argument(
+        "--num_samples",
+        type=int,
+        default=10000,
+        help="Number of random samples to draw from the surrogate model",
+    )
+    x11.add_argument(
+        "--epoch",
+        type=int,
+        default=0,
+        help="Epoch index passed to graph.query (many benchmarks use -1 for last epoch).",
+    )
+    graph= subparsers.add_parser("nasbench_graph", help="Random search on NAS-Bench-Graph")
+    graph.add_argument(
+        "--dataset",
+        type=str,
+        default="cora",
+        help="Dataset name (e.g., cora, citeseer, pubmed)",
+    )
+    graph.add_argument(
+        "--num_samples",
+        type=int,
+        default=10,
+        help="Number of random architectures to sample",
+    )
+    graph.add_argument(
+        "--k",
+        type=int,
+        default=10,
+        help="If set, prints top-k architectures by accuracy",
     )
     return parser
 

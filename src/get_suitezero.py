@@ -14,6 +14,8 @@ from nasbench.nas_bench_suite_zero.naslib.search_spaces import (
 )
 from nasbench.nas_bench_suite_zero.naslib.search_spaces.core.query_metrics import Metric
 from nasbench.nas_bench_suite_zero.naslib.utils import get_dataset_api
+from tqdm import tqdm
+import random
 
 
 SEARCH_SPACES = {
@@ -62,288 +64,450 @@ SORTABLE_METRICS = {
 }
 
 
-def _get_arch_genotype(graph: Any, search_space: str) -> Optional[Any]:
-    """Get architecture genotype representation."""
-    try:
-        if search_space == "nasbench101":
-            spec = graph.get_spec()
-            if spec and isinstance(spec, dict):
-                matrix = spec.get("matrix")
-                ops = spec.get("ops")
-                if matrix is not None and ops is not None:
-                    try:
-                        import numpy as np
-                        if isinstance(matrix, np.ndarray):
-                            matrix = matrix.tolist()
-                    except Exception:
-                        pass
-                    return {"matrix": matrix, "ops": ops}
-            return graph.get_hash()
-
-        if search_space == "nasbench301":
-            from naslib.search_spaces.nasbench301.conversions import (
-                convert_naslib_to_genotype,
-            )
-            genotype = convert_naslib_to_genotype(graph)
-            if hasattr(genotype, "_asdict"):
-                return genotype._asdict()
-            return genotype
-
-        if search_space == "nasbench201":
-            from naslib.search_spaces.nasbench201.conversions import (
-                convert_naslib_to_str,
-            )
-            return convert_naslib_to_str(graph)
-
-        if search_space.startswith("transbench101"):
-            op_indices = graph.get_op_indices()
-            if search_space == "transbench101_macro":
-                from naslib.search_spaces.transbench101.conversions import (
-                    convert_op_indices_macro_to_str,
-                )
-                return convert_op_indices_macro_to_str(op_indices)
-            else:
-                from naslib.search_spaces.transbench101.conversions import (
-                    convert_op_indices_micro_to_str,
-                )
-                return convert_op_indices_micro_to_str(op_indices)
-    except Exception:
-        pass
-
-    try:
-        return graph.get_hash()
-    except Exception:
-        return None
-
-
-def _maybe_query_hp_metric(
-    *,
-    graph: Any,
-    task: str,
-    epoch: int,
-    dataset_api,
-    metric: Metric,
-) -> Optional[Any]:
-    """Try to query metric from HP dict."""
-    if metric not in {Metric.FLOPS, Metric.PARAMETERS, Metric.LATENCY, Metric.TRAIN_TIME}:
-        return None
-
-    try:
-        hp = graph.query(Metric.HP, dataset=task, epoch=epoch, dataset_api=dataset_api)
-    except Exception:
-        return None
-
-    if not isinstance(hp, dict):
-        return None
-
-    if metric == Metric.FLOPS:
-        return hp.get("flops", hp.get("flop"))
-    if metric == Metric.PARAMETERS:
-        return hp.get("params", hp.get("parameters"))
-    if metric == Metric.LATENCY:
-        return hp.get("latency")
-    if metric == Metric.TRAIN_TIME:
-        return hp.get("train_time")
-
-    return None
-
-
-def _query_architecture(
-    *,
-    search_space: str,
-    task: str,
-    metric: Metric,
-    arch_spec: Any,
-    epoch: int,
-    dataset_api,
-) -> Optional[Dict]:
-    """Query a single architecture and return its metrics."""
-    try:
-        graph = SEARCH_SPACES[search_space]()
-        graph.set_spec(arch_spec, dataset_api=dataset_api)
-
-        genotype = _get_arch_genotype(graph, search_space)
-
-        # Query the metric
-        try:
-            value = graph.query(metric, dataset=task, epoch=epoch, dataset_api=dataset_api)
-            if value == -1:
-                value = _maybe_query_hp_metric(
-                    graph=graph, task=task, epoch=epoch, dataset_api=dataset_api, metric=metric
-                )
-                if value is None:
-                    return None
-        except Exception:
-            value = _maybe_query_hp_metric(
-                graph=graph, task=task, epoch=epoch, dataset_api=dataset_api, metric=metric
-            )
-            if value is None:
-                return None
-
-        return {
-            "genotype": genotype,
-            "arch_spec": arch_spec,
-            "metric_value": value,
-        }
-    except Exception as e:
-        return None
-
-
-def get_top_architectures(
-    *,
-    search_space: str,
-    task: str,
-    metric_name: str,
-    top_k: int,
-    epoch: int,
-    max_archs: Optional[int],
-    dataset_api,
-) -> List[Dict]:
-    """Get top-k architectures by the specified metric."""
+def get_on_nb101(args):
+    """Get top architectures from NASBench101"""
+    print(f'\n{"="*80}')
+    print(f'NASBench101 - Top {args.k} Architectures (Dataset: {args.dataset})')
+    print(f'{"="*80}\n')
     
-    if metric_name not in SORTABLE_METRICS:
-        raise ValueError(f"Metric {metric_name} not supported. Choose from: {list(SORTABLE_METRICS.keys())}")
-
-    metric, higher_is_better = SORTABLE_METRICS[metric_name]
-
-    print(f"Querying {search_space} on {task} for metric {metric_name}...")
-    print(f"{'Maximizing' if higher_is_better else 'Minimizing'} {metric_name}")
-
-    graph = SEARCH_SPACES[search_space]()
+    # Initialize search space and dataset API
+    search_space = NasBench101SearchSpace()
+    dataset_api = get_dataset_api('nasbench101', args.dataset)
     
-    # Check if search space has arch_iterator or needs random sampling
-    has_iterator = hasattr(graph, 'get_arch_iterator') and callable(getattr(graph, 'get_arch_iterator'))
+    print(f'Loading architectures from NASBench101...')
     
+    # Collect all architectures
     results = []
-    count = 0
-    errors = 0
-    seen_genotypes = set()  # Track unique architectures
-
-    if has_iterator:
-        # Use iterator for exhaustive search
-        try:
-            arch_iterator = graph.get_arch_iterator(dataset_api=dataset_api)
-            # Convert to list to avoid segfault with dictionary keys iterator
-            if hasattr(arch_iterator, 'keys') or not isinstance(arch_iterator, list):
-                arch_iterator = list(arch_iterator)
-        except Exception as e:
-            raise SystemExit(f"Failed to get architecture iterator: {e}")
-
-        for arch_spec in arch_iterator:
-            if max_archs is not None and count >= max_archs:
-                break
-
-            result = _query_architecture(
-                search_space=search_space,
-                task=task,
-                metric=metric,
-                arch_spec=arch_spec,
-                epoch=epoch,
-                dataset_api=dataset_api,
-            )
-
-            if result is not None:
-                results.append(result)
-                count += 1
-                if count % 100 == 0:
-                    print(f"Processed {count} architectures, found {len(results)} valid, {errors} errors")
-            else:
-                errors += 1
-    else:
-        # Use random sampling for search spaces without iterator
-        print(f"Using random sampling (no exhaustive iterator available)")
+    arch_iterator = search_space.get_arch_iterator(dataset_api)
+    
+    for arch_hash in tqdm(arch_iterator, desc="Querying architectures"):
+        search_space.set_spec(arch_hash, dataset_api=dataset_api)
         
-        max_samples = max_archs if max_archs is not None else 1000  # Default to 1000 samples
-        max_retries = max_samples * 10  # Allow retries for duplicates
+        # Query test accuracy
+        test_acc = search_space.query(
+            metric=Metric.TEST_ACCURACY,
+            dataset=args.dataset,
+            dataset_api=dataset_api,
+            epoch=108
+        )
         
-        attempts = 0
-        while count < max_samples and attempts < max_retries:
-            attempts += 1
-            
-            # Sample random architecture
-            try:
-                graph_sample = SEARCH_SPACES[search_space]()
-                graph_sample.sample_random_architecture(dataset_api=dataset_api)
-                arch_spec = graph_sample.get_op_indices()
-                
-                # Convert to tuple for hashing
-                arch_key = tuple(arch_spec) if hasattr(arch_spec, '__iter__') else arch_spec
-                
-                # Skip duplicates
-                if arch_key in seen_genotypes:
-                    continue
-                    
-                seen_genotypes.add(arch_key)
-                
-            except Exception as e:
-                errors += 1
-                continue
-
-            result = _query_architecture(
-                search_space=search_space,
-                task=task,
-                metric=metric,
-                arch_spec=arch_spec,
-                epoch=epoch,
-                dataset_api=dataset_api,
-            )
-
-            if result is not None:
-                results.append(result)
-                count += 1
-                if count % 50 == 0:
-                    print(f"Sampled {count} unique architectures, found {len(results)} valid, {errors} errors")
-            else:
-                errors += 1
-
-    print(f"Total processed: {count} architectures, {len(results)} valid, {errors} errors")
-
-    # Sort results
-    results.sort(key=lambda x: x["metric_value"], reverse=higher_is_better)
-
-    return results[:top_k]
+        val_acc = search_space.query(
+            metric=Metric.VAL_ACCURACY,
+            dataset=args.dataset,
+            dataset_api=dataset_api,
+            epoch=108
+        )
+        
+        train_time = search_space.query(
+            metric=Metric.TRAIN_TIME,
+            dataset=args.dataset,
+            dataset_api=dataset_api,
+            epoch=108
+        )
+        
+        params = search_space.query(
+            metric=Metric.PARAMETERS,
+            dataset=args.dataset,
+            dataset_api=dataset_api,
+            epoch=108
+        )
+        
+        results.append({
+            'hash': arch_hash,
+            'test_acc': test_acc,
+            'val_acc': val_acc,
+            'train_time': train_time,
+            'params': params
+        })
+    
+    # Sort by test accuracy
+    results.sort(key=lambda x: x['test_acc'], reverse=True)
+    
+    # Display top K
+    print(f'\n🏆 TOP {args.k} ARCHITECTURES BY TEST ACCURACY:\n')
+    for i, result in enumerate(results[:args.k], 1):
+        print(f'{i:2d}. Hash: {result["hash"]}')
+        print(f'    📊 Test Accuracy:  {result["test_acc"]:.4f}%')
+        print(f'    📈 Val Accuracy:   {result["val_acc"]:.4f}%')
+        print(f'    ⏱️  Train Time:     {result["train_time"]:.2f}s')
+        print(f'    🔢 Parameters:     {result["params"]:.2f}M')
+        print()
+    
+    print_statistics(results)
+    return results[:args.k]
 
 
-def get_top_arch(args) -> int:
+def get_on_nb201(args):
+    """Get top architectures from NASBench201"""
+    print(f'\n{"="*80}')
+    print(f'NASBench201 - Top {args.k} Architectures (Dataset: {args.dataset})')
+    print(f'{"="*80}\n')
+    
+    # Initialize search space and dataset API
+    search_space = NasBench201SearchSpace()
+    dataset_api = get_dataset_api('nasbench201', args.dataset)
+    
+    print(f'Collecting all architectures from NASBench201...')
+    
+    # Collect all architectures
+    results = []
+    arch_iterator = search_space.get_arch_iterator(dataset_api)
+    
+    for op_indices in tqdm(list(arch_iterator), desc="Querying architectures"):
+        search_space.set_spec(op_indices, dataset_api=dataset_api)
+        
+        # Query test accuracy
+        test_acc = search_space.query(
+            metric=Metric.TEST_ACCURACY,
+            dataset=args.dataset,
+            dataset_api=dataset_api
+        )
+        
+        val_acc = search_space.query(
+            metric=Metric.VAL_ACCURACY,
+            dataset=args.dataset,
+            dataset_api=dataset_api
+        )
+        
+        train_time = search_space.query(
+            metric=Metric.TRAIN_TIME,
+            dataset=args.dataset,
+            dataset_api=dataset_api
+        )
+        
+        params = search_space.query(
+            metric=Metric.PARAMETERS,
+            dataset=args.dataset,
+            dataset_api=dataset_api
+        )
+        
+        results.append({
+            'op_indices': op_indices,
+            'test_acc': test_acc,
+            'val_acc': val_acc,
+            'train_time': train_time,
+            'params': params
+        })
+    
+    # Sort by test accuracy
+    results.sort(key=lambda x: x['test_acc'], reverse=True)
+    
+    # Display top K
+    print(f'\n🏆 TOP {args.k} ARCHITECTURES BY TEST ACCURACY:\n')
+    for i, result in enumerate(results[:args.k], 1):
+        print(f'{i:2d}. Op Indices: {result["op_indices"]}')
+        print(f'    📊 Test Accuracy:  {result["test_acc"]:.4f}%')
+        print(f'    📈 Val Accuracy:   {result["val_acc"]:.4f}%')
+        print(f'    ⏱️  Train Time:     {result["train_time"]:.2f}s')
+        print(f'    🔢 Parameters:     {result["params"]:.2f}M')
+        print()
+    
+    print_statistics(results)
+    return results[:args.k]
 
-    task = args.task or TASKS[args.search_space][0]
-    if args.search_space in TASKS and task not in TASKS[args.search_space]:
-        valid = ", ".join(TASKS[args.search_space])
-        raise SystemExit(f"Unknown task '{task}' for {args.search_space}. Valid: {valid}")
 
-    if args.top_k <= 0:
-        raise SystemExit("--top_k must be >= 1")
+def get_on_nb301(args):
+    """Get top architectures from NASBench301 via random sampling"""
+    print(f'\n{"="*80}')
+    print(f'NASBench301 - Top {args.k} from {args.num_samples} Random Samples (Dataset: {args.dataset})')
+    print(f'{"="*80}\n')
+    
+    # Initialize search space and dataset API
+    search_space = NasBench301SearchSpace()
+    dataset_api = get_dataset_api('nasbench301', args.dataset)
+    
+    print(f'Sampling {args.num_samples} unique random architectures...')
+    
+    # Collect random architectures
+    results = []
+    sampled_hashes = set()
+    
+    pbar = tqdm(total=args.num_samples, desc="Sampling architectures", unit="arch")
+    
+    i = 0
+    attempts = 0
+    max_attempts = args.num_samples * 100
+    
+    while i < args.num_samples and attempts < max_attempts:
+        attempts += 1
+        
+        # Sample random architecture
+        search_space.sample_random_architecture(dataset_api=dataset_api)
+        arch_hash = search_space.get_hash()
+        
+        # Skip if already sampled
+        if arch_hash in sampled_hashes:
+            continue
+        
+        sampled_hashes.add(arch_hash)
+        
+        # Query metrics
+        test_acc = search_space.query(
+            metric=Metric.TEST_ACCURACY,
+            dataset=args.dataset,
+            dataset_api=dataset_api
+        )
+        
+        val_acc = search_space.query(
+            metric=Metric.VAL_ACCURACY,
+            dataset=args.dataset,
+            dataset_api=dataset_api
+        )
+        
+        train_time = search_space.query(
+            metric=Metric.TRAIN_TIME,
+            dataset=args.dataset,
+            dataset_api=dataset_api
+        )
+        
+        params = search_space.query(
+            metric=Metric.PARAMETERS,
+            dataset=args.dataset,
+            dataset_api=dataset_api
+        )
+        
+        results.append({
+            'hash': arch_hash,
+            'test_acc': test_acc,
+            'val_acc': val_acc,
+            'train_time': train_time,
+            'params': params
+        })
+        
+        i += 1
+        pbar.update(1)
+    
+    pbar.close()
+    
+    # Sort by test accuracy
+    results.sort(key=lambda x: x['test_acc'], reverse=True)
+    
+    # Display top K
+    print(f'\n🏆 TOP {args.k} ARCHITECTURES BY TEST ACCURACY:\n')
+    for i, result in enumerate(results[:args.k], 1):
+        print(f'{i:2d}. Architecture Hash: {result["hash"]}')
+        print(f'    📊 Test Accuracy:  {result["test_acc"]:.4f}%')
+        print(f'    📈 Val Accuracy:   {result["val_acc"]:.4f}%')
+        print(f'    ⏱️  Train Time:     {result["train_time"]:.2f}s')
+        print(f'    🔢 Parameters:     {result["params"]:.2f}M')
+        print()
+    
+    print_statistics(results)
+    return results[:args.k]
 
-    dataset_api = get_dataset_api(search_space=args.search_space, dataset=task)
 
-    top_archs = get_top_architectures(
-        search_space=args.search_space,
-        task=task,
-        metric_name=args.metric.upper(),
-        top_k=args.top_k,
-        epoch=args.epoch,
-        max_archs=args.max_archs,
-        dataset_api=dataset_api,
-    )
+def get_on_transbench101_micro(args):
+    """Get top architectures from TransBench101 Micro via random sampling"""
+    print(f'\n{"="*80}')
+    print(f'TransBench101-Micro - Top {args.k} from {args.num_samples} Random Samples (Task: {args.dataset})')
+    print(f'{"="*80}\n')
+    
+    # Initialize search space and dataset API
+    search_space = TransBench101SearchSpaceMicro()
+    dataset_api = get_dataset_api('transbench101_micro', args.dataset)
+    
+    print(f'Sampling {args.num_samples} unique random architectures...')
+    
+    # Collect random architectures
+    results = []
+    sampled_hashes = set()
+    
+    pbar = tqdm(total=args.num_samples, desc="Sampling architectures", unit="arch")
+    
+    i = 0
+    attempts = 0
+    max_attempts = args.num_samples * 100
+    
+    while i < args.num_samples and attempts < max_attempts:
+        attempts += 1
+        
+        # Sample random architecture
+        search_space.sample_random_architecture(dataset_api=dataset_api)
+        arch_hash = search_space.get_hash()
+        
+        # Skip if already sampled
+        if arch_hash in sampled_hashes:
+            continue
+        
+        sampled_hashes.add(arch_hash)
+        
+        # Query metrics
+        test_acc = search_space.query(
+            metric=Metric.TEST_ACCURACY,
+            dataset=args.dataset,
+            dataset_api=dataset_api
+        )
+        
+        val_acc = search_space.query(
+            metric=Metric.VAL_ACCURACY,
+            dataset=args.dataset,
+            dataset_api=dataset_api
+        )
+        
+        train_time = search_space.query(
+            metric=Metric.TRAIN_TIME,
+            dataset=args.dataset,
+            dataset_api=dataset_api
+        )
+        
+        params = search_space.query(
+            metric=Metric.PARAMETERS,
+            dataset=args.dataset,
+            dataset_api=dataset_api
+        )
+        
+        results.append({
+            'hash': arch_hash,
+            'test_acc': test_acc,
+            'val_acc': val_acc,
+            'train_time': train_time,
+            'params': params
+        })
+        
+        i += 1
+        pbar.update(1)
+    
+    pbar.close()
+    
+    # Sort by test accuracy
+    results.sort(key=lambda x: x['test_acc'], reverse=True)
+    
+    # Display top K
+    print(f'\n🏆 TOP {args.k} ARCHITECTURES BY TEST ACCURACY:\n')
+    for i, result in enumerate(results[:args.k], 1):
+        print(f'{i:2d}. Architecture Hash: {result["hash"]}')
+        print(f'    📊 Test Accuracy:  {result["test_acc"]:.4f}%')
+        print(f'    📈 Val Accuracy:   {result["val_acc"]:.4f}%')
+        print(f'    ⏱️  Train Time:     {result["train_time"]:.2f}s')
+        print(f'    🔢 Parameters:     {result["params"]:.2f}M')
+        print()
+    
+    print_statistics(results)
+    return results[:args.k]
 
-    if args.jsonl:
-        for i, arch in enumerate(top_archs, 1):
-            output = {
-                "rank": i,
-                "genotype": arch["genotype"],
-                "metric": args.metric.upper(),
-                "value": arch["metric_value"],
-            }
-            print(json.dumps(output, default=str))
+
+def get_on_transbench101_macro(args):
+    """Get top architectures from TransBench101 Macro via random sampling"""
+    print(f'\n{"="*80}')
+    print(f'TransBench101-Macro - Top {args.k} from {args.num_samples} Random Samples (Task: {args.dataset})')
+    print(f'{"="*80}\n')
+    
+    # Initialize search space and dataset API
+    search_space = TransBench101SearchSpaceMacro()
+    dataset_api = get_dataset_api('transbench101_macro', args.dataset)
+    
+    print(f'Sampling {args.num_samples} unique random architectures...')
+    
+    # Collect random architectures
+    results = []
+    sampled_hashes = set()
+    
+    pbar = tqdm(total=args.num_samples, desc="Sampling architectures", unit="arch")
+    
+    i = 0
+    attempts = 0
+    max_attempts = args.num_samples * 100
+    
+    while i < args.num_samples and attempts < max_attempts:
+        attempts += 1
+        
+        # Sample random architecture
+        search_space.sample_random_architecture(dataset_api=dataset_api)
+        arch_hash = search_space.get_hash()
+        
+        # Skip if already sampled
+        if arch_hash in sampled_hashes:
+            continue
+        
+        sampled_hashes.add(arch_hash)
+        
+        # Query metrics
+        test_acc = search_space.query(
+            metric=Metric.TEST_ACCURACY,
+            dataset=args.dataset,
+            dataset_api=dataset_api
+        )
+        
+        val_acc = search_space.query(
+            metric=Metric.VAL_ACCURACY,
+            dataset=args.dataset,
+            dataset_api=dataset_api
+        )
+        
+        train_time = search_space.query(
+            metric=Metric.TRAIN_TIME,
+            dataset=args.dataset,
+            dataset_api=dataset_api
+        )
+        
+        params = search_space.query(
+            metric=Metric.PARAMETERS,
+            dataset=args.dataset,
+            dataset_api=dataset_api
+        )
+        
+        results.append({
+            'hash': arch_hash,
+            'test_acc': test_acc,
+            'val_acc': val_acc,
+            'train_time': train_time,
+            'params': params
+        })
+        
+        i += 1
+        pbar.update(1)
+    
+    pbar.close()
+    
+    # Sort by test accuracy
+    results.sort(key=lambda x: x['test_acc'], reverse=True)
+    
+    # Display top K
+    print(f'\n🏆 TOP {args.k} ARCHITECTURES BY TEST ACCURACY:\n')
+    for i, result in enumerate(results[:args.k], 1):
+        print(f'{i:2d}. Architecture Hash: {result["hash"]}')
+        print(f'    📊 Test Accuracy:  {result["test_acc"]:.4f}%')
+        print(f'    📈 Val Accuracy:   {result["val_acc"]:.4f}%')
+        print(f'    ⏱️  Train Time:     {result["train_time"]:.2f}s')
+        print(f'    🔢 Parameters:     {result["params"]:.2f}M')
+        print()
+    
+    print_statistics(results)
+    return results[:args.k]
+
+
+def print_statistics(results):
+    """Print statistics about the results"""
+    if not results:
+        return
+    
+    best = results[0]
+    worst = results[-1]
+    avg_acc = sum(r['test_acc'] for r in results) / len(results)
+    
+    print(f'{"="*80}')
+    print(f'📈 STATISTICS')
+    print(f'{"="*80}')
+    print(f'Best Test Accuracy:    {best["test_acc"]:.4f}%')
+    print(f'Worst Test Accuracy:   {worst["test_acc"]:.4f}%')
+    print(f'Average Test Accuracy: {avg_acc:.4f}%')
+    print(f'Total Architectures:   {len(results)}')
+    print()
+
+
+
+def get_top_arch(args):
+    if args.search_space == "nasbench101":
+        get_on_nb101(args)
+    elif args.search_space == "nasbench201":
+        get_on_nb201(args)
+    elif args.search_space == "nasbench301":
+        get_on_nb301(args)
+    elif args.search_space == "transbench101_micro":
+        get_on_transbench101_micro(args)
+    elif args.search_space == "transbench101_macro":
+        get_on_transbench101_macro(args)
     else:
-        print(f"\n{'='*80}")
-        print(f"Top {len(top_archs)} architectures by {args.metric.upper()} on {args.search_space}/{task}")
-        print(f"{'='*80}\n")
+        raise ValueError(f"Unsupported search space: {args.search_space}")
 
-        for i, arch in enumerate(top_archs, 1):
-            print(f"Rank {i}: {args.metric.upper()} = {arch['metric_value']}")
-            print(f"  Genotype: {arch['genotype']}")
-            print()
-
-    return 0
-
+    
