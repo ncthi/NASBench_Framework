@@ -40,6 +40,97 @@ The current project structure is:
     └── nas_bench_suite_zero/   # NAS-Bench-Suite-Zero (naslib integration)
 ```
 
+## 0) Download benchmark data & surrogate models
+
+Some benchmarks ship with small assets in this repo, but the large “records” (tabular data / pickles / TFRecords) and surrogate model bundles are typically hosted externally.
+
+### NAS-Bench-Suite-Zero (SuiteZero)
+
+SuiteZero loads its datasets from:
+
+```bash
+nasbench/nas_bench_suite_zero/naslib/data/
+```
+
+Create the directory:
+
+```bash
+mkdir -p nasbench/nas_bench_suite_zero/naslib/data
+```
+
+Then download/copy the following files into that folder:
+
+- **NAS-Bench-101 (SuiteZero wrapper)**
+  - File: `nasbench_only108.pkl`
+  - Source: Google Drive folder referenced by SuiteZero (`nasbench/nas_bench_suite_zero/naslib/utils/get_dataset_api.py`).
+
+- **NAS-Bench-201 (SuiteZero wrapper)**
+  - Files:
+    - `nb201_cifar10_full_training.pickle`
+    - `nb201_cifar100_full_training.pickle`
+    - `nb201_ImageNet16_full_training.pickle`
+  - Source: same Google Drive folder referenced by SuiteZero.
+
+- **TransNAS-Bench-101 (SuiteZero wrapper / TransBench101 micro+macro)**
+  - File: `transnas-bench_v10141024.pth`
+  - Source: official TransNAS-Bench-101 release (link referenced by SuiteZero).
+
+- **NAS-Bench-301 (SuiteZero wrapper)**
+  - SuiteZero will auto-download the v1.0 surrogate models into `nasbench/nas_bench_suite_zero/naslib/data/` the first time you run:
+
+    ```bash
+    python main.py suitezero --search_space nasbench301 --dataset cifar10 --num_samples 10 --k 3
+    ```
+
+  - If your environment blocks outbound downloads, download the v1.0 model bundle from Figshare (link referenced by SuiteZero) and place it under:
+    - `nasbench/nas_bench_suite_zero/naslib/data/nb_models_1.0/xgb_v1.0/`
+    - `nasbench/nas_bench_suite_zero/naslib/data/nb_models_1.0/lgb_runtime_v1.0/`
+
+### NAS-Bench-301 (this repo’s `nasbench301` command)
+
+The `nasbench301` subcommand auto-downloads surrogate ensembles into:
+
+```bash
+nasbench/nasbench301/nb_models_<version>/
+```
+
+On first use, it will fetch models from Figshare automatically:
+
+```bash
+python main.py nasbench301 --version 1.0 --num-samples 10 --k 3
+```
+
+### HW-NAS-Bench
+
+To use `hwnasbench`, you typically need:
+
+- The HW-NAS-Bench pickle (e.g. `HW-NAS-Bench-v1_0.pickle`) placed at the repo root (or pass the path via CLI if you changed it).
+- The NAS-Bench-201 weights file `NAS-Bench-201-v1_1-096897.pth` (download from the official NAS-Bench-201 release) and pass it via `--nas201-path`.
+
+### AccelNASBench
+
+AccelNASBench surrogate models are expected under:
+
+```bash
+nasbench/accel_nasbench/anb_models_0_9/
+```
+
+If missing, use the downloader:
+
+```bash
+python -c "from nasbench.accel_nasbench.model_downloader import download_models; download_models('0.9', delete_zip=True, download_dir='nasbench/accel_nasbench')"
+```
+
+### NAS-Bench-X11
+
+NAS-Bench-X11 surrogate files are expected under:
+
+```bash
+nasbench/nas_bench_x11/models/
+```
+
+In this repo they are currently present under `nasbench/nas_bench_x11/models/`.
+
 ## 1) Conda environment setup
 
 The recommended way to install dependencies is using `environment.yml`.
