@@ -22,13 +22,29 @@ import numpy as np
 import torch
 import torchvision.transforms as transforms
 
-from fvcore.common.checkpoint import Checkpointer as fvCheckpointer
-from fvcore.common.config import CfgNode
+# fvcore is an optional dependency for some training/checkpointing utilities.
+# Some usage paths (e.g., simple benchmark querying) should not hard-require it.
+try:
+    from fvcore.common.checkpoint import Checkpointer as fvCheckpointer
+    from fvcore.common.config import CfgNode
+except ModuleNotFoundError:  # pragma: no cover
+    fvCheckpointer = None
+
+    class CfgNode:  # type: ignore
+        @staticmethod
+        def load_cfg(*_args, **_kwargs):
+            raise ModuleNotFoundError(
+                "fvcore is required for this config/checkpoint functionality. "
+                "Install it (e.g., `pip install fvcore`) to use these features."
+            )
 
 from .taskonomy_dataset import get_datasets
 from . import load_ops
 
-from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
+try:
+    from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
+except ModuleNotFoundError:  # pragma: no cover
+    ssim = ms_ssim = SSIM = MS_SSIM = None
 
 
 cat_channels = partial(torch.cat, dim=1)

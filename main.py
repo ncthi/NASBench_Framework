@@ -1,9 +1,19 @@
 import argparse
+import random
+import numpy as np
 from src import get_top_arch
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="NAS Benchmark Framework")
+    
+    # Global seed argument
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for reproducibility (default: 42)"
+    )
 
     subparsers = parser.add_subparsers(dest="nasbench", required=True)
 
@@ -63,16 +73,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="If set, prints top-k architectures by predicted accuracy",
     )
     p301.add_argument(
-        "--num-samples",
+        "--num_samples",
         type=int,
         default=10000,
         help="Number of random samples to draw from the surrogate ensemble",
-    )
-    p301.add_argument(
-        "--seed",
-        type=int,
-        default=0,
-        help="Random seed for sampling from the surrogate ensemble",
     )
     p301.add_argument(
         "--version",
@@ -187,9 +191,9 @@ def build_parser() -> argparse.ArgumentParser:
     pzero.add_argument(
         "--metric",
         required=False,
-        default="VAL_ACCURACY",
+        default="val_acc",
         type=str,
-        choices=["VAL_ACCURACY", "TEST_ACCURACY", "TRAIN_ACCURACY", "LATENCY", "PARAMETERS", "FLOPS"],
+        choices=["val_acc", "test_acc", "train_time", "latency", "parameters", "flops"],
         help="Metric to use for ranking architectures.",
     )
     pzero.add_argument(
@@ -200,18 +204,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Number of top architectures to return.",
     )
     pzero.add_argument(
-        "--max_archs",
-        required=False,
-        default=None,
+        "--num_samples",
         type=int,
-        help="Maximum number of architectures to evaluate (None = all).",
-    )
-    pzero.add_argument(
-        "--epoch",
-        required=False,
-        default=-1,
-        type=int,
-        help="Epoch index passed to graph.query (many benchmarks use -1 for last epoch).",
+        default=1000,
+        help="Number of random samples for NASBench301 and TransBench101 (default: 1000)",
     )
     pzero.add_argument(
         "--jsonl",
@@ -237,7 +233,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--num_samples",
         type=int,
         default=10000,
-        help="Number of random samples to draw from the surrogate model",
+        help="Number of random samples for nasbench 301",
     )
     x11.add_argument(
         "--epoch",
@@ -267,7 +263,30 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def set_random_seed(seed: int):
+    """Set random seed for reproducibility across all libraries"""
+    random.seed(seed)
+    np.random.seed(seed)
+    
+    # Set PyTorch seed if available
+    try:
+        import torch
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(seed)
+            torch.cuda.manual_seed_all(seed)
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+    except ImportError:
+        pass
+    
+    print(f"🌱 Random seed set to: {seed}")
+
+
 def main(args: argparse.Namespace) -> int:
+    # Set random seed for reproducibility
+    set_random_seed(args.seed)
+    
     get_top_arch(args)
     return 0
 

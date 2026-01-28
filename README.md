@@ -88,6 +88,7 @@ python main.py nasbench201 -h
 python main.py nasbench301 -h
 python main.py hwnasbench -h
 python main.py accelnasbench -h
+python main.py suitezero -h
 python main.py nasbench_x11 -h
 ```
 
@@ -225,6 +226,56 @@ python main.py accelnasbench [--seed SEED] [--num-candidates N] [--top-k K] [--s
 python main.py accelnasbench --num-candidates 200 --top-k 10 --sort-by accuracy --seed 3
 python main.py accelnasbench --sort-by throughput --throughput-device tpuv2 --model xgb
 python main.py accelnasbench --sort-by latency --latency-device zcu102 --model xgb
+```
+
+### NAS-Bench-Suite-Zero (SuiteZero)
+
+This subcommand exposes several NASLib search spaces packaged in NAS-Bench-Suite-Zero and returns the top-$k$ architectures by a chosen metric.
+
+**Usage**
+
+```bash
+python main.py [--seed SEED] suitezero \
+  --search_space {nasbench101,nasbench201,nasbench301,transbench101_macro,transbench101_micro} \
+  [--dataset DATASET] [--metric {val_acc,test_acc,train_time,latency,parameters,flops}] [--k K] [--num_samples N] [--jsonl]
+```
+
+Notes:
+
+- `--seed` is a global option for `main.py` and should be placed before the subcommand.
+- `--num_samples` is used for random-sampling based spaces (e.g. `nasbench301`, `transbench101_*`).
+- Metric support depends on the selected search space:
+  - `nasbench101`: `val_acc`, `test_acc`, `train_time`, `parameters`
+  - `nasbench201`: `val_acc`, `test_acc`, `train_time`, `parameters`
+  - `nasbench301`: `val_acc`, `train_time`
+  - `transbench101_micro` / `transbench101_macro`: `val_acc`, `test_acc`, `train_time`
+
+**Datasets / tasks**
+
+- `nasbench101`: `cifar10`
+- `nasbench201`: `cifar10`, `cifar100`, `ImageNet16-120`
+- `nasbench301`: `cifar10`
+- `transbench101_micro` / `transbench101_macro`:
+  `class_scene`, `class_object`, `jigsaw`, `room_layout`, `segmentsemantic`, `normal`, `autoencoder`
+
+**Examples**
+
+TransBench101 Macro (Taskonomy), sample 100 candidates and take top-5:
+
+```bash
+python main.py suitezero --search_space transbench101_macro --dataset class_scene --k 5 --num_samples 100
+```
+
+NAS-Bench-201 on CIFAR-100, rank by validation accuracy:
+
+```bash
+python main.py suitezero --search_space nasbench201 --dataset cifar100 --metric val_acc --k 10
+```
+
+Machine-readable output (JSON Lines):
+
+```bash
+python main.py suitezero --search_space transbench101_micro --dataset class_scene --k 5 --num_samples 100 --jsonl
 ```
 
 ### NAS-Bench-X11 (surrogate models)

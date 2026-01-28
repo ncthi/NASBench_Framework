@@ -197,34 +197,34 @@ def get_on_nb301(args):
     attempts = 0
     max_attempts = args.num_samples * 100
     
-    with tqdm(total=args.num_samples, desc="Sampling unique architectures") as pbar:
-        while i < args.num_samples and attempts < max_attempts:
-            attempts += 1
-            genotype = random_genotype()
+    for _ in tqdm(range(args.num_samples), desc="Sampling unique architectures"):
+        if i >= args.num_samples:
+            break
             
-            # Convert genotype thành dạng hashable để kiểm tra duplicate
-            genotype_key = (tuple(genotype.normal), tuple(genotype.normal_concat), 
-                           tuple(genotype.reduce), tuple(genotype.reduce_concat))
-            
-            # Kiểm tra xem đã tạo genotype này chưa
-            if genotype_key in seen_genotypes:
-                continue
-            
-            seen_genotypes.add(genotype_key)
-            i += 1
-            pbar.update(1)
-            pbar.set_postfix({'attempts': attempts, 'duplicates': attempts - i})
-            
-            # Query performance
-            learning_curve = nb311_surrogate_model.predict(config=genotype, representation="genotype", with_noise=True)
-            
-            accuracy = learning_curve[args.epoch - 1] if isinstance(learning_curve, (list, np.ndarray)) else learning_curve
-            
-            arch_results.append({
-                'genotype': genotype,
-                'learning_curve': learning_curve,
-                'accuracy': accuracy
-            })
+        attempts += 1
+        genotype = random_genotype()
+        
+        # Convert genotype thành dạng hashable để kiểm tra duplicate
+        genotype_key = (tuple(genotype.normal), tuple(genotype.normal_concat), 
+                       tuple(genotype.reduce), tuple(genotype.reduce_concat))
+        
+        # Kiểm tra xem đã tạo genotype này chưa
+        if genotype_key in seen_genotypes:
+            continue
+        
+        seen_genotypes.add(genotype_key)
+        i += 1
+        
+        # Query performance
+        learning_curve = nb311_surrogate_model.predict(config=genotype, representation="genotype", with_noise=True)
+        
+        accuracy = learning_curve[args.epoch - 1] if isinstance(learning_curve, (list, np.ndarray)) else learning_curve
+        
+        arch_results.append({
+            'genotype': genotype,
+            'learning_curve': learning_curve,
+            'accuracy': accuracy
+        })
     
     if attempts >= max_attempts:
         print(f"\nWarning: Reached max attempts ({max_attempts}). Only generated {i} unique architectures.")
